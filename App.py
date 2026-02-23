@@ -1,12 +1,11 @@
 import streamlit as st
-import pandas as pd
 import math
 
 st.set_page_config(page_title="Simulateur Cocktail & Buffet", layout="centered")
 
-st.title("🍽️ Simulateur de réception / cocktail")
+st.title("🍽️ Simulateur de Réception / Cocktail - V3")
 
-# --- Données de base ----
+# === Paramètres de base ===
 BAREME = {
     "Cocktail déjeunatoire": {"min": 8, "max": 14, "default": 10},
     "Cocktail dinatoire": {"min": 10, "max": 18, "default": 13},
@@ -16,7 +15,7 @@ BAREME = {
     "Journée complète": {"min": 20, "max": 30, "default": 25},
 }
 
-# --- Interface utilisateur ----
+# === Entrées utilisateur ===
 col1, col2 = st.columns(2)
 with col1:
     type_event = st.selectbox("Type d’événement", list(BAREME.keys()))
@@ -30,73 +29,88 @@ pieces_slider = st.slider(
     value=int(BAREME[type_event]["default"]),
 )
 
-alcool = st.radio("Boissons alcoolisées ?", ["Oui", "Non"], horizontal=True)
-option_style = st.selectbox(
-    "Style de service",
-    ["Classique", "Copieux", "Léger"]
+style = st.selectbox("Style de service", ["Léger", "Classique", "Copieux"])
+multiplier = {"Léger": 0.9, "Classique": 1.0, "Copieux": 1.2}[style]
+
+st.subheader("🥂 Sélection des boissons")
+colb1, colb2, colb3 = st.columns(3)
+with colb1:
+    inclure_softs = st.checkbox("Softs / sans alcool", value=True)
+with colb2:
+    inclure_vin = st.checkbox("Vin (rouge/blanc)")
+with colb3:
+    inclure_champagne = st.checkbox("Champagne")
+
+# === Ratios chaud/froid/sucré ===
+st.markdown("### 🍢 Répartition des pièces (ajustable)")
+
+r_col1, r_col2, r_col3 = st.columns(3)
+with r_col1:
+    ratio_froid = st.slider("Froid %", 0, 100, 40)
+with r_col2:
+    ratio_chaud = st.slider("Chaud %", 0, 100, 40)
+with r_col3:
+    ratio_sucre = st.slider("Sucré %", 0, 100, 20)
+
+total_ratio = ratio_froid + ratio_chaud + ratio_sucre
+if total_ratio != 100:
+    st.error("⚠️ Le total doit être égal à 100 %. Ajuste les curseurs.")
+    st.stop()
+
+# === Calculs ===
+pieces_total = nb_pers * pieces_slider * multiplier
+froid_total = pieces_total * (ratio_froid / 100)
+chaud_total = pieces_total * (ratio_chaud / 100)
+sucre_total = pieces_total * (ratio_sucre / 100)
+
+# === Boissons ===
+softs_btl_pour = 5
+vin_btl_pour = 6
+champ_btl_pour = 6
+
+softs_btl = math.ceil(nb_pers / softs_btl_pour) if inclure_softs else 0
+vin_btl = math.ceil(nb_pers / vin_btl_pour) if inclure_vin else 0
+champ_btl = math.ceil(nb_pers / champ_btl_pour) if inclure_champagne else 0
+
+# === Résumé ===
+st.markdown("---")
+st.markdown(f"## 📋 Fiche de synthèse – {type_event}")
+
+st.markdown(
+    f"""
+### 👥 Participants
+**{nb_pers} personnes**  
+Style : **{style}**
+
+### 🍴 Pièces prévues
+- Total : **{pieces_total:,.0f} pièces**  
+- Froides : **{froid_total:,.0f}**  
+- Chaudes : **{chaud_total:,.0f}**  
+- Sucrées : **{sucre_total:,.0f}**
+
+### 🍹 Boissons
+"""
 )
 
-# --- Définition des répartitions pièces ----
-# Ratios de base, que tu pourras affiner ensuite
-if "cocktail" in type_event.lower():
-    ratio_chaud = 0.4
-    ratio_froid = 0.4
-    ratio_sucre = 0.2
-elif type_event == "Journée complète":
-    ratio_chaud, ratio_froid, ratio_sucre = 0.45, 0.35, 0.20
-elif type_event == "Petit déjeuner":
-    ratio_chaud, ratio_froid, ratio_sucre = 0, 0, 1
-elif type_event == "Déjeuner assis":
-    ratio_chaud, ratio_froid, ratio_sucre = 0.5, 0.3, 0.2
+if inclure_softs or inclure_vin or inclure_champagne:
+    if inclure_softs:
+        st.write(f"• **Softs / sans alcool** : {softs_btl} bouteilles (1 L)")
+    if inclure_vin:
+        st.write(f"• **Vin (rouge / blanc)** : {vin_btl} bouteilles")
+    if inclure_champagne:
+        st.write(f"• **Champagne** : {champ_btl} bouteilles")
 else:
-    ratio_chaud, ratio_froid, ratio_sucre = 0.4, 0.4, 0.2
+    st.write("_Aucune boisson sélectionnée._")
 
-# Ajustement “intensité”
-multiplier = {"Léger": 0.9, "Classique": 1.0, "Copieux": 1.2}[option_style]
-
-pieces_total = nb_pers * pieces_slider * multiplier
-chaudes_total = pieces_total * ratio_chaud
-froides_total = pieces_total * ratio_froid
-sucrees_total = pieces_total * ratio_sucre
-
-# --- Boissons ----
-# Hypothèses standards
-softs_btl_pour = 5
-alcool_btl_pour = 6
-
-softs_btl = math.ceil(nb_pers / softs_btl_pour)
-alcool_btl = math.ceil(nb_pers / alcool_btl_pour) if alcool == "Oui" else 0
-
-# --- Affichage ----
+# Résumé des totaux rapides (pour affichage visuel)
 st.markdown("---")
-st.subheader("📊 Résumé")
-
-data = {
-    "Éléments": [
-        "Participants",
-        "Pièces totales",
-        "Pièces chaudes",
-        "Pièces froides",
-        "Pièces sucrées",
-        "Bouteilles softs (1 L)",
-        "Bouteilles alcoolisées (vin/champagne)",
-    ],
-    "Valeurs": [
-        f"{nb_pers}",
-        f"{pieces_total:.0f}",
-        f"{chaudes_total:.0f}",
-        f"{froides_total:.0f}",
-        f"{sucrees_total:.0f}",
-        f"{softs_btl}",
-        f"{alcool_btl}" if alcool == "Oui" else "–",
-    ],
-}
-
-df = pd.DataFrame(data)
-st.table(df)
+col_r1, col_r2, col_r3 = st.columns(3)
+col_r1.metric("🥶 Froides", f"{int(froid_total)}")
+col_r2.metric("🔥 Chaudes", f"{int(chaud_total)}")
+col_r3.metric("🍰 Sucrées", f"{int(sucre_total)}")
 
 st.markdown("---")
 st.caption(
-    "Les ratios et répartitions sont basés sur une moyenne professionnelle (cocktails traiteur 2024). "
-    "Tous les paramètres sont ajustables."
+    "💡 Les ratios et volumes sont calculés sur des moyennes standards traiteur 2024. "
+    "Ajuste les curseurs et options selon ton besoin."
 )
